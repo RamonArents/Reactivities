@@ -7,6 +7,8 @@ import {
   runInAction,
 } from "mobx";
 import { createContext, SyntheticEvent } from "react";
+import { toast } from "react-toastify";
+import { history } from '../..';
 import agent from "../api/agent";
 import { IActivity } from "../models/activity";
 
@@ -24,18 +26,24 @@ class ActivityStore {
   @observable target = "";
 
   @computed get activitiesByDate() {
-    return this.groupActivitiesByDate(Array.from(this.activityRegistry.values()));
+    return this.groupActivitiesByDate(
+      Array.from(this.activityRegistry.values())
+    );
   }
 
   groupActivitiesByDate(activities: IActivity[]) {
     const sortedActivities = activities.sort(
-      (a, b) => Date.parse(a.date) - Date.parse(b.date)
-    )
-    return Object.entries(sortedActivities.reduce((activities, activity) => {
-      const date = activity.date.split('T')[0];
-      activities[date] = activities[date] ? [...activities[date], activity] : [activity];
-      return activities;
-    }, {} as {[key: string]: IActivity[]}));
+      (a, b) => a.date.getTime() - b.date.getTime()
+    );
+    return Object.entries(
+      sortedActivities.reduce((activities, activity) => {
+        const date = activity.date.toISOString().split("T")[0];
+        activities[date] = activities[date]
+          ? [...activities[date], activity]
+          : [activity];
+        return activities;
+      }, {} as { [key: string]: IActivity[] })
+    );
   }
 
   @action loadActivities = async () => {
@@ -46,7 +54,7 @@ class ActivityStore {
       runInAction(() => {
         //access to variable of funtion (without this)
         activities.forEach((activity) => {
-          activity.date = activity.date.split(".")[0];
+          activity.date = new Date(activity.date);
           //access to observable variable (with this)
           this.activityRegistry.set(activity.id, activity);
         });
@@ -61,36 +69,40 @@ class ActivityStore {
     }
   };
 
-  @action loadActivity = async (id:string) => {
+  @action loadActivity = async (id: string) => {
     let activity = this.getActivity(id);
-    if(activity){
+    if (activity) {
       this.activity = activity;
-    } else{
+      return activity;
+    } else {
       this.loadingInitial = true;
       try {
         activity = await agent.Activities.details(id);
         //getting activity
         runInAction(() => {
+          activity.date = new Date(activity.date);
           this.activity = activity;
+          this.activityRegistry.set(activity.id, activity);
           this.loadingInitial = false;
-        })
-      } catch(error){
+        });
+        return activity;
+      } catch (error) {
         //get activity error
         runInAction(() => {
           this.loadingInitial = false;
-        })
+        });
         console.log(error);
       }
-    } 
-  }
+    }
+  };
 
   @action clearActivity = () => {
     this.activity = null;
-  }
+  };
 
-  getActivity = (id:string) => {
+  getActivity = (id: string) => {
     return this.activityRegistry.get(id);
-  }
+  };
 
   @action createActivity = async (activity: IActivity) => {
     this.submitting = true;
@@ -100,15 +112,15 @@ class ActivityStore {
       runInAction(() => {
         this.activityRegistry.set(activity.id, activity);
         this.submitting = false;
-      })
-
+      });
+      history.push(`/activities/${activity.id}`)
     } catch (error) {
       //create activity error
       runInAction(() => {
         this.submitting = false;
-      
-      })
-      console.log(error);
+      });
+      toast.error('Problem submitting data');
+      console.log(error.response);
     }
   };
 
@@ -121,13 +133,15 @@ class ActivityStore {
         this.activityRegistry.set(activity.id, activity);
         this.activity = activity;
         this.submitting = false;
-      }) 
+      });
+      history.push(`/activities/${activity.id}`)
     } catch (error) {
       //edit activity error
       runInAction(() => {
         this.submitting = false;
-      })
-      console.log(error);
+      });
+      toast.error('Problem submitting data');
+      console.log(error.response);
     }
   };
 
@@ -144,14 +158,13 @@ class ActivityStore {
         this.activityRegistry.delete(id);
         this.submitting = false;
         this.target = "";
-      })
-     
+      });
     } catch (error) {
       //delete activity error
       runInAction(() => {
         this.submitting = false;
         this.target = "";
-      })
+      });
       console.log(error);
     }
   };

@@ -1,5 +1,4 @@
 import React from "react";
-import { render } from "react-dom";
 import { Tab } from "semantic-ui-react";
 import ProfilePhotos from "./ProfilePhotos";
 
